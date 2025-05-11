@@ -1,42 +1,51 @@
 const express = require("express");
-const admin = require("firebase-admin");
 const bodyParser = require("body-parser");
+const fs = require("fs");
+const path = require("path");
 
 const app = express();
 app.use(bodyParser.json({ limit: "20mb" }));
 
-const serviceAccount = require("./serviceAccountKey.json");
+// Make sure uploads directory exists
+const uploadDir = path.join(__dirname, "uploads");
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir);
+}
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-  storageBucket: "kata-lingua.appspot.com", 
-});
-
-const bucket = admin.storage().bucket();
+// Optional: Simple metadata storage file
+const metadataFile = path.join(__dirname, "submissions.json");
 
 app.post("/upload", async (req, res) => {
   try {
     const { base64, filename, contentType, metadata } = req.body;
+    if (!base64 || !filename || !contentType || !metadata) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
     const buffer = Buffer.from(base64, "base64");
+    const filePath = path.join(uploadDir, filename);
 
-    const file = bucket.file(`audios/${filename}`);
-    await file.save(buffer, { metadata: { contentType } });
+    fs.writeFileSync(filePath, buffer);
 
-    const [url] = await file.getSignedUrl({
-      action: "read",
-      expires: "03-01-2500",
-    });
+    // Save metadata to JSON file
+    let submissions = [];
+    if (fs.existsSync(metadataFile)) {
+      submissions = JSON.parse(fs.readFileSync(metadataFile));
+    }
 
-    await admin.firestore().collection("submissions").add({
+    submissions.push({
+      filename,
+      contentType,
       ...metadata,
-      audioURL: url,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: new Date().toISOString(),
     });
 
-    res.status(200).send({ url });
-  } catch (error) {
-    console.error("Upload failed:", error);
-    res.status(500).send({ error: error.message });
+    fs.writeFileSync(metadataFile, JSON.stringify(submissions, null, 2));
+
+    res.status(200).json({ message: "✅ Uploaded successfully", filename });
+  } catch (err) {
+    console.error("❌ Upload failed:", err);
+    res.status(500).json({ error: "Server error" });
   }
 });
 

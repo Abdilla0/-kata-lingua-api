@@ -23,7 +23,7 @@ app.post("/upload", async (req, res) => {
     const uploadRes = await cloudinary.uploader.upload(
       `data:${contentType};base64,${base64}`,
       {
-        resource_type: "video", // video allows audio files like m4a, mp3
+        resource_type: "video", // audio/m4a/mp3 must use "video"
         folder: "kata-audio",
         public_id: filename.split(".")[0],
       }
@@ -50,6 +50,21 @@ app.post("/upload", async (req, res) => {
   } catch (err) {
     console.error("❌ Cloudinary upload failed:", err);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ✅ New route to fetch all metadata entries
+app.get("/submissions", (req, res) => {
+  try {
+    if (!fs.existsSync(metadataFile)) {
+      return res.status(200).json([]);
+    }
+
+    const submissions = JSON.parse(fs.readFileSync(metadataFile));
+    res.status(200).json(submissions);
+  } catch (err) {
+    console.error("❌ Failed to read submissions:", err);
+    res.status(500).json({ error: "Failed to load submissions" });
   }
 });
 

@@ -54,17 +54,16 @@ app.post("/upload", async (req, res) => {
 });
 
 // ✅ New route to fetch all metadata entries
-app.get("/submissions", (req, res) => {
+app.get("/submissions.json", (req, res) => {
   try {
     if (!fs.existsSync(metadataFile)) {
-      return res.status(200).json([]);
+      return res.status(404).send("submissions.json not found");
     }
 
-    const submissions = JSON.parse(fs.readFileSync(metadataFile));
-    res.status(200).json(submissions);
+    res.sendFile(metadataFile);
   } catch (err) {
-    console.error("❌ Failed to read submissions:", err);
-    res.status(500).json({ error: "Failed to load submissions" });
+    console.error("❌ Failed to send file:", err);
+    res.status(500).send("Error reading file");
   }
 });
 

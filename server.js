@@ -11,6 +11,7 @@ app.use(bodyParser.json({ limit: "20mb" }));
 
 const metadataFile = path.join(__dirname, "submissions.json");
 
+// POST /upload → Upload audio + save metadata
 app.post("/upload", async (req, res) => {
   try {
     const { base64, filename, contentType, metadata } = req.body;
@@ -23,18 +24,19 @@ app.post("/upload", async (req, res) => {
     const uploadRes = await cloudinary.uploader.upload(
       `data:${contentType};base64,${base64}`,
       {
-        resource_type: "video", // audio/m4a/mp3 must use "video"
+        resource_type: "video", // audio files go under video
         folder: "kata-audio",
         public_id: filename.split(".")[0],
       }
     );
 
-    // Save metadata
+    // Load existing entries
     let submissions = [];
     if (fs.existsSync(metadataFile)) {
       submissions = JSON.parse(fs.readFileSync(metadataFile));
     }
 
+    // Create new entry
     const newEntry = {
       audioURL: uploadRes.secure_url,
       contentType,
@@ -42,10 +44,11 @@ app.post("/upload", async (req, res) => {
       createdAt: new Date().toISOString(),
     };
 
+    // Save
     submissions.push(newEntry);
     fs.writeFileSync(metadataFile, JSON.stringify(submissions, null, 2));
 
-    console.log("📦 Uploaded to Cloudinary:", uploadRes.secure_url);
+    console.log("✅ Uploaded to Cloudinary:", uploadRes.secure_url);
     res.status(200).json({ message: "✅ Uploaded to Cloudinary", url: uploadRes.secure_url });
   } catch (err) {
     console.error("❌ Cloudinary upload failed:", err);
@@ -53,7 +56,22 @@ app.post("/upload", async (req, res) => {
   }
 });
 
-// ✅ New route to fetch all metadata entries
+// GET /submissions → return saved metadata
+app.get("/submissions", (req, res) => {
+  try {
+    if (!fs.existsSync(metadataFile)) {
+      return res.status(200).json([]);
+    }
+
+    const submissions = JSON.parse(fs.readFileSync(metadataFile));
+    res.status(200).json(submissions);
+  } catch (err) {
+    console.error("❌ Failed to read submissions:", err);
+    res.status(500).json({ error: "Failed to load submissions" });
+  }
+});
+
+// GET /submissions.json → raw file access
 app.get("/submissions.json", (req, res) => {
   try {
     if (!fs.existsSync(metadataFile)) {

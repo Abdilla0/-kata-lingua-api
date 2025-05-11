@@ -9,7 +9,7 @@ const serviceAccount = require("./serviceAccountKey.json");
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
-  storageBucket: "YOUR_BUCKET.appspot.com", // replace this!
+  storageBucket: "kata-lingua.appspot.com", 
 });
 
 const bucket = admin.storage().bucket();

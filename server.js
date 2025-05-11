@@ -3,18 +3,12 @@ const bodyParser = require("body-parser");
 const cors = require("cors");
 const fs = require("fs");
 const path = require("path");
+const cloudinary = require("./cloudinary");
 
 const app = express();
 app.use(cors());
 app.use(bodyParser.json({ limit: "20mb" }));
 
-// Ensure /uploads directory exists
-const uploadDir = path.join(__dirname, "uploads");
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir);
-}
-
-// Metadata storage file
 const metadataFile = path.join(__dirname, "submissions.json");
 
 app.post("/upload", async (req, res) => {
@@ -25,18 +19,24 @@ app.post("/upload", async (req, res) => {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
-    const buffer = Buffer.from(base64, "base64");
-    const filePath = path.join(uploadDir, filename);
-    fs.writeFileSync(filePath, buffer);
+    // Upload to Cloudinary
+    const uploadRes = await cloudinary.uploader.upload(
+      `data:${contentType};base64,${base64}`,
+      {
+        resource_type: "video", // video allows audio files like m4a, mp3
+        folder: "kata-audio",
+        public_id: filename.split(".")[0],
+      }
+    );
 
-    // Append metadata
+    // Save metadata
     let submissions = [];
     if (fs.existsSync(metadataFile)) {
       submissions = JSON.parse(fs.readFileSync(metadataFile));
     }
 
     const newEntry = {
-      filename,
+      audioURL: uploadRes.secure_url,
       contentType,
       ...metadata,
       createdAt: new Date().toISOString(),
@@ -45,12 +45,10 @@ app.post("/upload", async (req, res) => {
     submissions.push(newEntry);
     fs.writeFileSync(metadataFile, JSON.stringify(submissions, null, 2));
 
-    console.log("📁 Saved to:", filePath);
-    console.log("📝 Metadata saved for:", filename);
-
-    res.status(200).json({ message: "✅ Uploaded successfully", filename });
+    console.log("📦 Uploaded to Cloudinary:", uploadRes.secure_url);
+    res.status(200).json({ message: "✅ Uploaded to Cloudinary", url: uploadRes.secure_url });
   } catch (err) {
-    console.error("❌ Upload failed:", err);
+    console.error("❌ Cloudinary upload failed:", err);
     res.status(500).json({ error: err.message });
   }
 });
